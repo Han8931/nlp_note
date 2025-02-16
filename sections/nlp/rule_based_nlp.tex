@@ -1,0 +1,190 @@
+\chapter{Classical NLP Techniques}
+
+\section{Edit Distance}
+\label{sec:nlp_edit_distance}
+
+Edit distance is a method used in spell correction to determine how similar two words are by calculating the minimum number of operations (insertions, deletions, or substitutions) required to transform one word into another. The smaller the edit distance, the more similar the two words are.
+
+For example, let's say we have the following dictionary of valid words: "cat", "car", "cart", "care", "cards", "cast". If the input word is "carr", we calculate the edit distance between "carr" and each word in the dictionary as follows:
+
+\begin{itemize}
+	\item cat: 3 (insert "r" and "r", then delete "t")
+	\item car: 1 (replace second "r" with "t")
+	\item cart: 2 (insert "t" and delete second "r")
+\end{itemize}
+
+The smallest edit distance is 1, between "carr" and "car", so "car" would be selected as the corrected word.
+
+The edit distance method can be improved by using techniques such as weighting the importance of each operation (insertion, deletion, substitution) or using a more sophisticated algorithm such as \textit{Levenshtein distance}. Additionally, the method can be combined with other methods such as language modeling or phonetic analysis to further improve spell correction accuracy.
+
+\section{Point-wise Mutual Information}
+\label{sec:nlp_pmi}
+
+Point-wise Mutual Information (PMI) is a statistical measure to calculate the association between two words in a given corpus. PMI is calculated by comparing the probability of the co-occurrence of two words with their individual probabilities of occurrence.
+
+Formally, it is a quantity which is closely related to the mutual information is the point-wise mutual information. For two events (not random variables) $x$ and $y$, this is defined as
+\begin{align}
+	\textrm{PMI}[x,y] &\triangleq \textrm{log}\frac{p(x, y)}{p(x)p(y)}\\
+					 &= \frac{p(x|y)}{p(x)}=\frac{p(y|x)}{p(y)}
+	\label{eq:pmi}
+\end{align}
+This measures the discrepancy between these events occurring together compared to what would be expected by chance. 
+
+\begin{itemize}
+	\item $x$ and $y$ are two words being considered,
+	\item $P(x)$ is the probability of the occurrence of word $x$ in the corpus,
+	\item $P(y)$ is the probability of the occurrence of word $y$ in the corpus, and
+	\item $P(x,y)$ is the probability of the co-occurrence of words $x$ and $y$ in the corpus. In other words, $x$ and $y$ are adjacent
+\end{itemize}
+
+For terms with three words, the formula becomes:
+\begin{align*}
+	\textrm{PMI}[x,y,z] &= \textrm{log}\frac{p(x, y, z)}{p(x)p(y)p(z)}
+\end{align*}
+PMI values can range from $-\infty$ to $\infty$. Positive PMI values indicate that the words have a strong association, while negative values indicate that the words are unlikely to appear together.
+
+For example, consider a small corpus of text:
+\begin{itemize}
+	\item "The cat sat on the mat. The dog sat on the mat."
+	\item The matrix below is $6\times 6$ considering all possible combination of the "forward" co-occurrences.
+	\begin{align*}
+		\begin{bmatrix}
+		&the &cat &dog &sat &on  &mat\\
+		the & 0  &1   &1   &0   &0   &2\\
+		cat & 0  &0   &0   &1   &0   &0\\
+		dog & 0  &0   &0   &1   &0   &0\\
+		sat & 0  &0   &0   &0   &2   &0\\
+		on  & 2  &0   &0   &0   &0   &0\\
+		mat & 0  &0   &0   &0   &0   &0\\
+		\end{bmatrix}
+	\end{align*}
+\end{itemize}
+
+
+\subsection{Remove Stopwords prior to PMI}
+In the above example we have not removed stopwords, so some of you might be wondering if we need to remove stopwords prior to PMI. It depends on the problem statement but if your objective is to find the related words, you should remove stopwords prior to calculating PMI. 
+
+\section{TF-IDF}
+\label{sec:nlp_tf_idf}
+
+The term TF stands for term frequency, and the term IDF stands for inverse document frequency.
+
+The TF-IDF representation takes into account the importance of each word in a document. In the bag-of-words model, each word is assumed to be equally important, which is obviously a less accurate assumption.
+
+The method to calculate the TF-IDF weights of a term in a document is given by the following formula:
+
+\begin{itemize}
+	\item \textbf{Term Frequency} (TF), $tf(t,d)$, is the relative frequency of term $t$ within document $d$,
+		$$tf(t,d) = \frac{f_{t,d}}{\sum_{t'\in d}f_{t',d}},$$
+
+		where $f_{t,d}$ is the raw count of a term in a document, \ie, the number of times that term $t$ occurs in document $d$. Note the denominator is simply the total number of terms in document $d$ (counting each occurrence of the same term separately). There are various other ways to define term frequency:
+		\begin{itemize}
+			\item The raw count itself: $tf(t,d) = f_{t,d}$ 
+    		\item Boolean "frequencies": 
+				\begin{align*}
+					tf(t,d) = \begin{cases}
+						1, \quad \text{if $t$ occurs in $d$}\\
+						0 \quad \text{otherwise}
+							\end{cases}
+				\end{align*}
+    		\item Logarithmically scaled frequency: $tf(t,d) = \log (1 + ft,d)$
+    		\item Augmented frequency, to prevent a bias towards longer documents, \eg. raw frequency divided by the raw frequency of the most frequently occurring term in the document:
+				\begin{align*}
+					tf(t,d) = 0.5 + 0.5\frac{f_{t,d}}{\max \{f_{t',d}:t' \in d\}}
+				\end{align*}
+		\end{itemize}
+	\item \textbf{Inverse document frequency (IDF)}: \textit{The IDF is a measure of how much information the word provides}, \ie, if it is common or rare across all documents. It is the logarithmically scaled inverse fraction of the documents that contain the word, which is obtained by dividing the total number of documents by the number of documents containing the term, and then taking the logarithm of that quotient: 
+		\begin{align*}
+			idf(t, D) = \log \frac{N}{|\{d\in D: t\in d\}|}
+		\end{align*}
+		\begin{itemize}
+			\item $N$ total number of documents in the corpus ($=|D|$). 
+			\item $|\{d\in D: t\in d\}|$: number of documents where the term $t$ appears. If the term is not in the corpus, this will lead to a division-by-zero. It is therefore common to adjust the numerator $1 + N$ and denominator to $1+|\{d\in D: t\in d\}|$.
+			\item Similarly, IDF can also be expressed
+		\begin{align*}
+			idf(t, D) = \log \frac{N-n+0.5}{n+0.5}+1,
+		\end{align*}
+		where $n$ is the number of documents containing the term $t$.
+		\end{itemize}
+
+\end{itemize}
+
+\subsection{Term frequency–inverse document frequency}
+TF-IDF is calculated as a multiplication of $tf(t, D)$ and $idf(t, D)$. 
+\begin{itemize}
+	\item A high weight in TF–IDF is reached by a high term frequency (in the given document) and a low document frequency of the term in the whole collection of documents; the weights hence tend to filter out common terms. 
+	\item Since the ratio inside the IDF's log function is always greater than or equal to 1, the value of IDF (and TF–IDF) is greater than or equal to 0. 
+	\item As a term appears in more documents, the ratio inside the logarithm approaches 1, bringing the IDF and TF–IDF closer to 0. 
+\end{itemize}
+
+
+In short, TF
+\begin{itemize}
+	\item This measures the frequency of a word in a document. If a word appears more times in a document, it is likely more important to the document.
+	\item number of times term ``word'' appears in a document / Total number of terms in the document
+	\item Consider a document containing 100 words wherein the word `cat' appears 3 times, then TF is 0.03
+\end{itemize}
+
+IDF: 
+\begin{itemize}
+	\item This measures the importance of a word in the entire corpus. If a word appears in many documents, it is likely less important to any individual document. 
+	\item $\log_e$ total number of documents/ Number of documents with term ``word'' in it. 
+	\item If we have 10 million documents, and `cat' appears in 1,000 of these. Then, IDF is $\log 10,000,000/1,000$  = 4
+\end{itemize}
+
+Finally, TF-IDF is $0.03\times 4 = 0.12$ 
+The higher the TF-IDF score, the rarer the term and vice versa. 
+
+
+
+% \subsection{Justification of IDF}
+% Let's say we can estimate the probability that a given document $d$ contains a term $t$ as the relative document frequency 
+% \begin{align*}
+% 	P(t|D) &= \frac{|\{d\in D: t\in d\}|}{N}.
+% \end{align*}
+% Then, 
+% \begin{align*}
+% 	IDF &= -\log P(t|D)\\
+% 		&= \log \frac{1}{P(t|D)}\\
+% 		&= \log \frac{N}{|\{d\in D: t\in d\}|}.\\
+% \end{align*}
+
+% \subsection{Python Implementation}
+
+
+
+\subsection{Link with Information Theory}
+This expression shows that summing the TF–IDF of all possible terms and documents recovers the mutual information between documents and term taking into account all the specificities of their joint distribution. Each TF–IDF hence carries the "bit of information" attached to a term x document pair. 
+
+
+\section{Best Match 25 Ranking Algorithm}
+\label{sec:nlp_bm25}
+Best Match 25 ranking algorithm or BM25 is a bag-of-words retrieval function that ranks a set of documents based on the query terms appearing in each document, regardless of their proximity within the document. It is a family of scoring functions with slightly different components and parameters. One of the most prominent instantiations of the function is as follows. 
+
+Given a query $Q$, containing keywords $q_1, \dots, q_n$, the BM25 score of a document $D$ is given by
+\begin{align*}
+	\text{score}(D,Q)=\sum_{i=1}^n IDF(q_i)\cdot \frac{f(q_i, D)\cdot (k_1+1)}{f(q_i, D)+k_1\cdot (1-b+b\cdot\frac{|D|}{avgd1})},
+\end{align*}
+where $f(q_i, D)$ is the number of times that the keyword $q_i$ occurs in the document, $D$, $|D|$ is the length of the document $D$ in words, and $avgd1$ is the average document length in a collection of documents. $k_1$ and $b$ are free parameters, usually chosen, in absence of an advanced optimization, as $k_1\in [1.2, 2.0]$ and $b=0.75$.
+
+\section{Reciprocal Rank Fusion }
+\label{sec:nlp_rrf}
+Reciprocal Rank Fusion (RRF), a simple method for combining the document rankings from multiple information retrieval systems.
+
+\begin{align*}
+	RRF(d\in D) = \sum_{r\in R}\frac{1}{k+r(d)}
+\end{align*}
+\begin{itemize}
+	\item $k$ is a constant that helps to balance between high and low ranking. Typically set at 60.
+	\item $r(d)$ is the rank/position of the document.
+\end{itemize}
+
+
+\section{PageRank and TextRank}
+
+
+
+
+
+
+

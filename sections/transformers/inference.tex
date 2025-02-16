@@ -1,0 +1,208 @@
+\section{Inference of Autoregressive Model}
+
+In an autoregressive transformer (such as GPT), tokens are generated one at a time. During inference, the model must compute attention for the next token based on all previously generated tokens. However, because recomputing the entire attention from scratch at each time step would be inefficient, these models use \textit{caching} to store intermediate results (the keys and values) from previous time steps. Below is an explanation with equations and clear notations.
+
+\paragraph{Inference Overview in Autoregressive Models}
+\begin{itemize}
+	\item Training: The model can process the entire sequence in parallel using masked self-attention. A mask (typically a triangular matrix) prevents tokens from ``seeing'' future tokens.
+	\item Inference: The model generates one token at a time. At time step \( t+1 \), it uses the already generated tokens \( [x_1, x_2, \dots, x_t] \) to compute the probability distribution for the next token.
+\end{itemize}
+
+To avoid recomputing keys and values for tokens \( x_1, \dots, x_t \) at every step, the model stores them (usually for each layer). When a new token is generated, only its query needs to be computed, and then the cached keys and values are used to compute the attention.
+
+The technique of storing and reusing the computed keys and values from previous tokens during autoregressive generation is commonly called \textit{KV caching} (short for Key-Value Caching).
+
+\paragraph{Step 1: Previous Tokens and Cached Representations}
+
+Assume that by time step \( t \) the model has generated tokens:
+\[
+x_1,\, x_2,\, \dots,\, x_t.
+\]
+
+For a given transformer layer, let the cached key and value matrices be:
+\[
+\begin{aligned}
+K_{\leq t} &\in \mathbb{R}^{t \times d_k}, \\
+V_{\leq t} &\in \mathbb{R}^{t \times d_v},
+\end{aligned}
+\]
+where \( d_k \) is the key (and query) dimension and \( d_v \) is the value dimension.
+
+\paragraph{Step 2: Compute the Query for the New Token}
+
+When generating the next token \( x_{t+1} \), its input (often the embedding of the previously generated token or a special “start” symbol) is used to compute a query vector for each layer:
+\[
+q_{t+1} \in \mathbb{R}^{d_k}.
+\]
+
+This is computed by a linear projection:
+\[
+q_{t+1} = x_{t+1} \, W^Q,
+\]
+where \( W^Q \in \mathbb{R}^{d_{\text{model}} \times d_k} \) is the learned projection matrix.
+
+\paragraph{Step 3: Compute the Attention Scores}
+
+The new query \( q_{t+1} \) is compared with all the cached keys. In a single attention head, the (scaled) dot-product attention scores are computed as:
+\[
+s_{t+1,j} = \frac{q_{t+1} \cdot k_j}{\sqrt{d_k}} \quad \text{for } j=1,2,\dots,t,
+\]
+and often, for implementation convenience, the new token's own key \( k_{t+1} \) is also computed and appended to the cache. In that case, you would have:
+\[
+s_{t+1,j} = \frac{q_{t+1} \cdot k_j}{\sqrt{d_k}} \quad \text{for } j=1,2,\dots,t+1.
+\]
+
+Since the model is autoregressive, the mask is implicit. There are no ``future'' tokens beyond \( t+1 \) at inference time. (If you do compute for all \( t+1 \) positions, a mask would ensure that token \( t+1 \) only attends to tokens \( 1 \) through \( t+1 \).)
+
+\paragraph{Step 4: Apply the Softmax to Get Attention Weights}
+
+The scores are then normalized with the softmax function to obtain the attention weights:
+\[
+\alpha_{t+1,j} = \frac{\exp(s_{t+1,j})}{\sum_{j'=1}^{t+1} \exp(s_{t+1,j'})}, \quad j = 1,\dots,t+1.
+\]
+
+These weights determine how much the new token attends to each of the previous tokens (and its own representation, if included).
+
+\paragraph{Step 5: Compute the Weighted Sum of Values}
+
+The output of the attention layer for the new token is then computed as:
+\[
+z_{t+1} = \sum_{j=1}^{t+1} \alpha_{t+1,j}\, v_j,
+\]
+where each \( v_j \) is the value vector from the cache (or computed for the new token in the case of \( j=t+1 \)):
+\[
+v_j = x_j\, W^V, \quad j = 1,\dots,t+1.
+\]
+
+This \( z_{t+1} \) is then passed on through the rest of the transformer layer (including feed-forward sub-layers, layer normalization, etc.) to eventually produce logits over the vocabulary.
+
+\paragraph{Step 6: Generate the Next Token and Update the Cache}
+\begin{itemize}
+	\item The model uses the final output (after all transformer layers) to compute a probability distribution over the vocabulary.
+	\item A token is chosen (\eg via sampling or greedy decoding) and appended to the sequence.
+	\item The new token's key and value vectors (from each layer) are computed and added to the cache so that future tokens can attend to it.
+\end{itemize}
+
+\subsection{Inference without Caching}
+
+Let's take a look at the following example:
+\begin{itemize}
+	\item Number of tokens so far: \(t=3\). We have already generated tokens \(\{x_1, x_2, x_3\}\). We now want to generate token \(x_4\).  
+	\item Model dimensionality: To keep it simple, let's say each token embedding is 2-dimensional (\(d_{\text{model}} = 2\)) and the attention uses a single head with key/query dimension \(d_k = 2\) and value dimension \(d_v = 2\). 
+	\item Token embeddings (just made-up numbers):
+	  \[
+		x_1 = \begin{bmatrix}1 \\ 2\end{bmatrix}, \quad
+		x_2 = \begin{bmatrix}3 \\ 4\end{bmatrix}, \quad
+		x_3 = \begin{bmatrix}5 \\ 6\end{bmatrix}, \quad
+		x_4 = \begin{bmatrix}? \\ ?\end{bmatrix} \; 
+	  \]
+	  The forth one is the one we want to generate. We will compute attention for tokens \(x_1, x_2, x_3, x_4\) all at once.  
+  \item Projection matrices (\(W^Q, W^K, W^V\)) are each \(2 \times 2\) for this example. For instance, we have the following matrices:
+  \[
+    W^Q = \begin{bmatrix}1 & 0 \\[6pt] 0 & 1\end{bmatrix}, \quad
+    W^K = \begin{bmatrix}1 & 2 \\[6pt] 0 & 1\end{bmatrix}, \quad
+    W^V = \begin{bmatrix}0.5 & -0.5 \\[6pt] 1.0 & 0.5\end{bmatrix}.
+  \]
+\end{itemize}
+
+\paragraph{Step A: Compute Queries, Keys, and Values}
+
+\begin{itemize}
+	\item Queries:  
+   \[
+     q_i = x_i \, W^Q 
+   \]
+   For \(i=1,2,3,4\):
+   \begin{itemize}
+	   \item \(q_1 = [1\;\;2] \begin{bmatrix}1 & 0 \\ 0 & 1\end{bmatrix} = \begin{bmatrix}1 & 2\end{bmatrix}\)
+	   \item \(q_2 = [3\;\;4] \begin{bmatrix}1 & 0 \\ 0 & 1\end{bmatrix} = \begin{bmatrix}3 & 4\end{bmatrix}\)
+	   \item \(q_3 = [5\;\;6] \begin{bmatrix}1 & 0 \\ 0 & 1\end{bmatrix} = \begin{bmatrix}5 & 6\end{bmatrix}\)
+	   \item \(q_4 = [?,\; ?] \begin{bmatrix}1 & 0 \\ 0 & 1\end{bmatrix} = \begin{bmatrix}? & ?\end{bmatrix}\)
+   \end{itemize}
+	\item Keys:
+	   \[
+		 k_i = x_i \, W^K
+	   \]
+	   For \(i=1,2,3,4\):
+	   \begin{itemize}
+		   \item \(k_1 = [1\;\;2] \begin{bmatrix}1 & 2 \\ 0 & 1\end{bmatrix}
+			 = \begin{bmatrix}1 & 4\end{bmatrix}\)
+		   \item \(k_2 = [3\;\;4] \begin{bmatrix}1 & 2 \\ 0 & 1\end{bmatrix} 
+			 = \begin{bmatrix}3 & 10\end{bmatrix}\)
+		   \item \(k_3 = [5\;\;6] \begin{bmatrix}1 & 2 \\ 0 & 1\end{bmatrix} 
+			 = \begin{bmatrix}5 & 16\end{bmatrix}\)
+		   \item \(k_4 = [?,\; ?] \begin{bmatrix}1 & 2 \\ 0 & 1\end{bmatrix} 
+			 = \begin{bmatrix}? & ?\end{bmatrix}\)
+	   \end{itemize}
+	\item Values:
+	   \[
+		 v_i = x_i \, W^V
+	   \]
+	   For \(i=1,2,3,4\):
+	   \begin{itemize}
+		   \item \(v_1 = [1\;\;2] \begin{bmatrix}0.5 & -0.5 \\ 1.0 & 0.5\end{bmatrix} 
+			 = \begin{bmatrix}2.5 & 0.5\end{bmatrix}\)
+		   \item \(v_2 = [3\;\;4] \begin{bmatrix}0.5 & -0.5 \\ 1.0 & 0.5\end{bmatrix} 
+			 = \begin{bmatrix}5.5 & 0.5\end{bmatrix}\)
+		   \item \(v_3 = [5\;\;6] \begin{bmatrix}0.5 & -0.5 \\ 1.0 & 0.5\end{bmatrix} 
+			 = \begin{bmatrix}8.5 & 0.5\end{bmatrix}\)
+		   \item \(v_4 = [?,\; ?] \begin{bmatrix}0.5 & -0.5 \\ 1.0 & 0.5\end{bmatrix} 
+			 = \begin{bmatrix}? & ?\end{bmatrix}\)
+	   \end{itemize}
+\end{itemize}
+
+All of the above must be computed at the current time step if we do not use caching.
+
+With KV caching, you would \emph{not} recalculate \(k_1, k_2, k_3\) and \(v_1, v_2, v_3\). Instead:
+
+\begin{itemize}
+	\item You already have \(\{k_1, k_2, k_3\}\) and \(\{v_1, v_2, v_3\}\) stored from the previous steps.  
+	\item You only compute:
+		\begin{itemize}
+			\item \(q_4\) (the query for the new token),
+			\item \(k_4, v_4\) (the new key and value to add to the cache).  
+		\end{itemize}
+\end{itemize}
+In other words, you skip re-projecting and re-computing every key and value from tokens \(\{1,2,3\}\). This saves a substantial amount of computation when generating long sequences, especially in large transformers (like GPT).
+
+\textbf{Note that storing data in the cache uses up memory space.} Systems with limited memory resources may struggle to accommodate this additional memory overhead, potentially resulting in out-of-memory errors. This is especially the case when long inputs need to be processed, as the memory required for the cache grows linearly with the input length and the batch size.
+
+\begin{figure}[t]
+	\centering
+	\includegraphics[scale=0.8]{./images/transformer/kv_caching.pdf}
+	\caption{An example of KV caching}
+\end{figure}
+
+\paragraph{Computational Cost}
+
+In sum, the vanilla self-attention on $n$ tokens,
+\begin{itemize}
+	\item each token needs to look at all $n$ tokens to get attention scores
+    \item Thus, the cost is $O(n^2)$ 
+\end{itemize}
+
+For instance, if we given a sentence with three tokens,
+\begin{enumerate}
+	\item First token: Look at 1 token (cost: $O(1^2)$)
+	\item Second token: Look at 2 tokens (cost: $O(2^2)$)
+	\item Third token: Look at 3 tokens (cost: $O(3^2)$)
+\end{enumerate}
+
+If we add up all these costs for generating a sequence of length $n$, we get:
+\begin{align*}
+	O(1^2+2^2+3^2+\dots+n^2)\approx O(n^3)
+\end{align*}
+
+With caching,
+\begin{enumerate}
+	\item Process 1 token cost $O(1)$
+	\item Process 1 new token + look at 1 cached token cost $O(2)$
+	\item Process 1 new token + look at 2 cached tokens cost $O(3)$ 
+\end{enumerate}
+
+Adding these up:
+\begin{align*}
+	O(1+2+3+\dots+n)=O(n^2)
+\end{align*}
+
+

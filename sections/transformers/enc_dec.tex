@@ -1,0 +1,21 @@
+% \subsection{Skip Connection}
+% This is a regularization technique.
+
+\section{Encoder-Decoder}
+% \label{sec:}
+
+\subsection{Encoder}
+
+\subsection{Decoder}
+The output of each step is fed to the bottom decoder in the next time step, and the decoders bubble up their decoding results just like the encoders did. And just like we did with the encoder inputs, we embed and add positional encoding to those decoder inputs to indicate the position of each word.
+
+\begin{lstlisting}[language=Python]
+def forward(self, tgt: Tensor, memory: Tensor) -> Tensor:
+	seq_len, dimension = tgt.size(1), tgt.size(2)
+	tgt += position_encoding(seq_len, dimension)
+	for layer in self.layers:
+		tgt = layer(tgt, memory)
+	return torch.softmax(self.linear(tgt), dim=-1)
+\end{lstlisting}
+
+
