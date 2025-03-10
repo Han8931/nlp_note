@@ -1,0 +1,70 @@
+Unlike batch normalization, Layer Normalization directly estimates the normalization statistics from the summed inputs to the neurons within a hidden layer so the normalization does not introduce any new dependencies between training cases. It works well for RNNs and improves both the training time and the generalization performance of several existing RNN models. More recently, it has been used with Transformer models.
+
+
+1. **Definition**  
+   Layer Normalization (LN) normalizes the inputs across all hidden units in a single layer for a given example. Specifically, suppose we have a hidden representation \( \mathbf{x} = (x_1, x_2, \ldots, x_d) \) of dimensionality \( d \). Layer normalization computes:
+
+   \[
+   \mu = \frac{1}{d} \sum_{i=1}^d x_i, \quad 
+   \sigma^2 = \frac{1}{d} \sum_{i=1}^d (x_i - \mu)^2
+   \]
+
+   and produces the output:
+
+   \[
+   \text{LN}(\mathbf{x})_i = \gamma \cdot \frac{x_i - \mu}{\sqrt{\sigma^2 + \epsilon}} + \beta
+   \]
+
+   Here, \(\gamma\) and \(\beta\) are learned parameters (element-wise scale and shift), and \(\epsilon\) is a small constant to avoid division by zero.
+
+2. **Difference from Batch Normalization**  
+   - **Batch Normalization** normalizes across the examples in a mini-batch and uses the statistics of the batch.  
+   - **Layer Normalization** normalizes across the hidden units in a single example.  
+
+   Because of this, LN does **not** rely on the statistics of a batch and works well for models like Transformers that handle variable sequence lengths and may have smaller batch sizes or even one example at a time (e.g., during inference or fine-tuning).
+
+---
+
+## Why Transformers Use Layer Normalization
+
+### 1. Stability in Training  
+Transformers rely heavily on multi-head self-attention and position-wise feed-forward sub-layers. The outputs of these operations can exhibit high variance. Layer normalization re-centers and re-scales these outputs, preventing exploding or vanishing activations.
+
+### 2. Independence from Batch Size  
+Because layer normalization does not average across the batch dimension, the training dynamics remain more consistent even if the batch size changes. This is particularly useful in the common scenario of fine-tuning Transformers with small mini-batches.
+
+### 3. Works Well with Residual Connections  
+In a Transformer, each sub-layer is wrapped in a residual connection and has a LayerNorm step either before or after the main operation (depending on the variant). This design (sometimes called “pre-norm” or “post-norm”) helps ensure that the residual signal stays well-controlled.
+
+---
+
+## Where Layer Normalization Appears in a Transformer
+
+Each encoder and decoder block in the Transformer typically has two sub-layers (multi-head attention and feed-forward). A common layout is:
+
+1. **Pre-norm variant**:  
+   \[
+   \mathbf{z} = \text{LN}\Big(\mathbf{x} + \text{MultiHeadAttention}(\mathbf{x}, \mathbf{x}, \mathbf{x})\Big)
+   \]
+   \[
+   \text{output} = \text{LN}\Big(\mathbf{z} + \text{FeedForward}(\mathbf{z})\Big)
+   \]
+
+2. **Post-norm variant** (original Vaswani et al. approach):  
+   \[
+   \mathbf{z} = \mathbf{x} + \text{MultiHeadAttention}(\text{LN}(\mathbf{x}), \text{LN}(\mathbf{x}), \text{LN}(\mathbf{x}))
+   \]
+   \[
+   \text{output} = \mathbf{z} + \text{FeedForward}(\text{LN}(\mathbf{z}))
+   \]
+
+   In either approach, layer normalization helps keep the activations within a stable range.
+
+---
+
+- **Normalization within each training example**: LN computes mean and variance along the features dimension, rather than along the batch dimension.
+- **Important for Transformer stability**: LN reduces training instability due to rapidly changing hidden states in attention/MLP layers.
+- **Batch-size independence**: LN performs consistently for small or large batch sizes and during inference when there may be only a single example.
+- **Used throughout the architecture**: Typically, Transformers apply LN at multiple points (after or before residual connections in each sub-layer).
+
+Overall, layer normalization is one of the fundamental building blocks of modern Transformer models, enabling them to train faster, more stably, and with fewer sensitivity issues to batch size.

@@ -1,0 +1,110 @@
+\section{LoRA}
+LoRA (Low-Rank Adaptation) is a popular method under the umbrella of Parameter-Efficient Fine-Tuning (PEFT). Instead of updating all the parameters of a large pre-trained model during fine-tuning, LoRA only learns a small number of additional parameters that capture task-specific adjustments. This approach makes the training more memory‐ and compute‐efficient while often achieving comparable performance to full fine-tuning.
+
+\subsection{The Core Idea of LoRA}
+
+In standard fine-tuning, one might update a large weight matrix \( W \) in a neural network layer to adapt the model for a new task. LoRA takes a different approach:
+\begin{itemize}
+	\item Freeze the Original Weights: The original weight matrix \( W \) remains fixed.
+	\item Learn a Low-Rank Update: Instead of modifying \( W \) directly, LoRA introduces a learnable update \( \Delta W \) that is constrained to be low-rank. The changes made to $W$ during fine-tuning are collectively represented by \( \Delta W \), such that the updated weights can be expressed as \( W+\Delta W \). This update is typically expressed as the product of two smaller matrices:
+\end{itemize}
+  \[
+  \Delta W = A B
+  \]
+where:
+\begin{itemize}
+  \item \( A \in \mathbb{R}^{d \times r} \)
+  \item \( B \in \mathbb{R}^{r \times k} \)
+  \item \( r \) (the rank) is chosen such that \( r \ll \min(d, k) \)
+\end{itemize}
+
+Thus, during fine-tuning, the effective weight becomes:
+\[
+W' = W + \Delta W = W + A B
+\]
+
+\subsection{Low-Rank Decomposition}
+
+% - **Dimensions:**  
+Suppose \( W \) is of size \( d \times k \). In a full fine-tuning scenario, updating \( W \) would involve learning \( d \times k \) parameters. In LoRA, the low-rank update involves learning:
+\[
+d \times r \quad \text{(from } A\text{)} \quad + \quad r \times k \quad \text{(from } B\text{)}
+\]
+When \( r \) is much smaller than \( d \) and \( k \), the total number of trainable parameters is drastically reduced.
+
+% #### **Scaling Factor**
+
+\paragraph{Optional Scaling:} In many implementations, a scaling factor \( \alpha \) is applied to control the magnitude of the update:
+  \[
+  \Delta W = \frac{\alpha}{r} \, A B
+  \]
+  This scaling ensures that the contributions of the low-rank matrices are appropriately balanced with the fixed weights \( W \).
+
+  \paragraph{Forward Pass Computation} Example in a Transformer Layer:
+  For an input vector \( h \), a typical linear transformation with weight \( W \) becomes:
+  \[
+  h \, W' = h \left( W + \frac{\alpha}{r} A B \right) = h \, W + \frac{\alpha}{r} \, h \, A B
+  \]
+  Only \( A \) and \( B \) are updated during training, while \( W \) stays constant.
+
+Below is a simplified PyTorch example of a LoRA-enabled linear layer. In a transformer, you could replace, say, the query projection with this LoRA-enabled layer:
+
+\begin{lstlisting}[language=Python]
+import torch
+import torch.nn as nn
+import math
+
+class LoRALinear(nn.Module):
+    def __init__(self, in_features, out_features, r=4, alpha=1.0):
+        super(LoRALinear, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.r = r
+        self.alpha = alpha
+        # The original weight is frozen
+        self.weight = nn.Parameter(torch.Tensor(out_features, in_features), requires_grad=False)
+        # Initialize LoRA parameters
+        self.A = nn.Parameter(torch.Tensor(r, in_features))
+        self.B = nn.Parameter(torch.Tensor(out_features, r))
+        # Initialize weights
+        nn.init.kaiming_uniform_(self.A, a=math.sqrt(5))
+        nn.init.zeros_(self.B)
+        # Scaling factor for the low-rank update
+        self.scaling = self.alpha / self.r
+
+    def forward(self, x):
+        # Standard linear output using the frozen weight
+        base_output = torch.nn.functional.linear(x, self.weight)
+        # LoRA update
+        lora_output = torch.nn.functional.linear(x, self.B @ self.A) * self.scaling
+        # Return the sum of the base output and the LoRA update
+        return base_output + lora_output
+
+# Example usage in a transformer module:
+class TransformerAttention(nn.Module):
+    def __init__(self, d_model, num_heads, r=4, alpha=1.0):
+        super(TransformerAttention, self).__init__()
+        self.d_model = d_model
+        self.num_heads = num_heads
+        # Let's assume d_model is divisible by num_heads.
+        self.head_dim = d_model // num_heads
+        
+        # Replace standard linear layers with LoRA-enhanced layers for query, key, and value
+        self.q_proj = LoRALinear(d_model, d_model, r=r, alpha=alpha)
+        self.k_proj = LoRALinear(d_model, d_model, r=r, alpha=alpha)
+        self.v_proj = LoRALinear(d_model, d_model, r=r, alpha=alpha)
+        
+        # The output projection can be standard or also LoRA-enhanced based on design choices
+        self.out_proj = nn.Linear(d_model, d_model)
+        
+    def forward(self, x):
+        # x shape: (batch_size, seq_length, d_model)
+        Q = self.q_proj(x)
+        K = self.k_proj(x)
+        V = self.v_proj(x)
+        # (Further processing like splitting into heads, scaled dot-product attention, etc.)
+        # Here, we just illustrate the projections.
+        return self.out_proj(Q)  # Simplified output
+\end{lstlisting}
+# In this example, only the query, key, and value projections are augmented with LoRA.
+
