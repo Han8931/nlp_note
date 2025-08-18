@@ -1,0 +1,79 @@
+**Skip connections**—often referred to as **shortcut connections**—are direct connections that bypass one or more layers in a neural network. They were popularized by the **ResNet** (Residual Network) architecture but appear in various forms across many modern network designs. In essence, skip connections allow the network to "skip" certain transformations and directly pass activations from earlier layers to later layers. 
+
+Below is an overview of how skip connections work and **why** they are effective, with a bit of the accompanying mathematical reasoning.
+
+---
+
+## 1. The Basic Form of a Skip Connection
+
+Consider a single “residual block” with input \(\mathbf{x}\). Without any skip connection, the output of this block would be
+\[
+    \mathbf{y} = F(\mathbf{x}),
+\]
+where \(F(\cdot)\) is some learnable transformation (e.g., a few convolutional layers plus nonlinearities).
+
+By introducing a **skip connection**, the block output becomes:
+\[
+    \mathbf{y} = \mathbf{x} + F(\mathbf{x}).
+\]
+When \(\mathbf{x}\) is added to \(F(\mathbf{x})\), we say \(\mathbf{x}\) “skips over” the internal layers that make up \(F(\cdot)\). As a result, if \(F(\mathbf{x})\) learned to be exactly the zero function, the entire residual block would act as an identity mapping (\(\mathbf{x} \mapsto \mathbf{x}\)), making deeper networks easier to train.
+
+---
+
+## 2. Mathematical Reasoning for Effectiveness
+
+### 2.1. Improved Gradient Flow
+
+When we compute gradients via backpropagation, the partial derivative of the output \(\mathbf{y}\) w.r.t. the input \(\mathbf{x}\) in a residual block is:
+\[
+    \frac{\partial \mathbf{y}}{\partial \mathbf{x}}
+    \;=\;
+    \frac{\partial (\mathbf{x} + F(\mathbf{x}))}{\partial \mathbf{x}}
+    \;=\;
+    \mathbf{I} + \frac{\partial F(\mathbf{x})}{\partial \mathbf{x}},
+\]
+where \(\mathbf{I}\) is the identity matrix. This means that, even if \(\partial F(\mathbf{x}) / \partial \mathbf{x}\) becomes small, the identity component \(\mathbf{I}\) ensures that some non-zero gradient still passes backward. 
+
+- **Without skip connections**, multiple layers of transformations multiply together in the gradient chain, and if each transformation has a norm less than 1, the gradient can vanish exponentially quickly.  
+- **With skip connections**, there is a direct path (the identity) contributing to the gradient, reducing the chance that the gradient will vanish as the network depth increases.
+
+As a result, **deeper** networks with skip connections can be trained more reliably, since the flow of gradients from the final layers to the initial layers is much less obstructed.
+
+### 2.2. Learning Residual Functions vs. Original Mappings
+
+Another reason for the effectiveness of skip connections is that it is often easier to learn **residuals** than to learn direct mappings. Specifically, if the ideal target function is close to the identity mapping, then the network only needs to learn a **small** residual function \(F(\mathbf{x})\). This perspective was highlighted in the original ResNet paper:
+
+- Suppose the network wants to represent \(\mathbf{y} \approx \mathbf{x}\). Without a skip connection, the network must learn \(F(\mathbf{x}) \approx \mathbf{x}\), which can be difficult if \(\mathbf{x}\) is high-dimensional.  
+- With a skip connection, the network only has to learn \(F(\mathbf{x}) \approx \mathbf{0}\). Learning to output *zeros* (or small values) is an easier learning task than learning an entire identity function from scratch.
+
+This smaller “residual” viewpoint stabilizes training and often leads to better convergence properties.
+
+### 2.3. The Vanishing Gradient Problem (Revisited)
+
+A classic problem in deep networks is **vanishing gradients**—where the gradient shrinks too quickly as it propagates backward through many layers. Mathematically, for a deep network of \(L\) layers, a gradient might involve the product of \(L\) Jacobian matrices:
+\[
+    \prod_{l=1}^L \frac{\partial \mathbf{h}_l}{\partial \mathbf{h}_{l-1}},
+\]
+which can easily shrink toward zero if most factors have singular values less than 1. By adding skip connections, part of the gradient flows via an identity path:
+\[
+    \ldots \; \xrightarrow{\mathbf{I}} \; \ldots,
+\]
+which contributes directly \(\mathbf{I}\) in the product chain and helps mitigate the vanishing effect.
+
+---
+
+## 3. Additional Benefits
+
+- **Feature Reuse:** In some architectures (like DenseNet or U-Net), multiple skip connections allow early-layer features to be used downstream without degradation, enhancing representational power.  
+- **Regularization Effect:** By allowing multiple paths through the network, skip connections can make optimization landscapes smoother, reducing pathological local minima or saddle points.
+
+---
+
+## 4. Summary
+
+**Skip connections** reshape neural networks so that each block learns a residual function \(F(\mathbf{x})\) on top of the identity \(\mathbf{x}\). Mathematically, this ensures:
+
+1. **Easier gradient flow** via partial derivatives that always include an identity term, mitigating vanishing gradients.
+2. **Simpler optimization**, as blocks merely learn slight deviations from \(\mathbf{x}\) instead of complex mappings from scratch.
+
+These properties allow us to successfully train **much deeper** neural networks while maintaining strong performance—an outcome that was more challenging before the advent of skip connections.
