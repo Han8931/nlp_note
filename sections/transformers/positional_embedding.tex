@@ -131,6 +131,35 @@ Since \( d_{\text{model}} = 4 \), we have 4 dimensions indexed \(0, 1, 2, 3\). T
 \]
 \end{itemize}
 
+\subsection{Issues}
+
+
+\begin{itemize}
+	\item Poor length extrapolation
+		\begin{itemize}
+			\item Models see a finite range of absolute indices during training. At inference, new indices (longer contexts) map to unseen $p_i$—distribution shift.
+			\item Sinusoidal APE helps a bit (positions are computed, not learned), but periodicity can cause aliasing at very long lengths and still doesn't give a clean relative bias.
+		\end{itemize}
+	\item Translation non-equivariance
+		\begin{itemize}
+			\item If you shift the entire sequence by $+k$, absolute indices change, so the same local pattern appears under different $p_i$. The model must relearn invariances that are naturally relative (\eg the next token depends on the previous few tokens, regardless of where they are).
+		\end{itemize}
+	\item No direct encoding of relative distance
+		\begin{itemize}
+			\item With APE, attention scores don't decompose nicely into a term that is a function of ($i − j$). The model can learn to approximate relative behavior, but it's indirect and fragile.
+		\end{itemize}
+	\item Fixed or awkward max length
+		\begin{itemize}
+			\item Learned APE needs a table up to some $L_{max}$. Going beyond it requires interpolation or ad-hoc extension; both can degrade quality.
+			\item Even sinusoidal forms often require careful frequency choices and still degrade for out-of-distribution lengths.
+		\end{itemize}
+	\item Streaming / chunking pain: 
+		\begin{itemize}
+			\item For long-form or streaming inference, resetting positions per chunk changes absolute indices and can cause mismatches when stitching attention across chunks. Extra engineering (position remapping) is needed.
+		\end{itemize}
+\end{itemize}
+
+
 
 \subsection{RoPE}
 
