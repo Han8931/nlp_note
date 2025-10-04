@@ -1,12 +1,12 @@
 \section{NTK-Aware Scaled RoPE}
 
-RoPE encodes positions by rotating each query/key vector by angles that grow with token index. Those angles come from a bank of sinusoidal frequencies ($\theta_i = b^{-2i/d}$) (where ($b$) is the base, typically $10,000$, ($d$) is the head dimension, and ($i$) indexes each $2-D$ subspace).
+RoPE encodes positions by rotating each query/key vector by angles that grow with token index. Those angles come from a bank of sinusoidal frequencies $\theta_i = b^{-2i/d}$, where ($b$) is the base, typically $10,000$, $d$ is the head dimension, and $i$ indexes each 2D subspace.
 
-If you simply ask a model trained at, say, 4K tokens to read 16K tokens, the rotations at large positions become too fast and the model loses its sense of local distances.
+If you simply ask a model trained at, say, $4k$ tokens to read $16k$ tokens, the rotations at large positions become too fast and the model loses its sense of local distances.
 
 \textit{NTK-aware scaling} fixes this by not squeezing positions, but by changing the RoPE base so the effective frequency bank shifts to lower frequencies, preserving the model's Neural Tangent Kernel (its training-time geometry) over a longer span. Empirically this lets you extend context (often 2–4$\times$) with small perplexity hit, even without fine-tuning; with light finetuning it goes further (\eg Code LLaMA). 
 
-Let ($s$) be the \textit{extension factor} (\eg going 4K $\to$ 16K means ($s=4$)), and let ($|D|=d$) be the per-head dimension.
+Let $s$ be the \textit{extension factor} (\eg going $4k$ $\to$ $16k$ means $s=4$), and let $|D|=d$ be the per-head dimension.
 
 NTK-aware scaling replaces the RoPE base ($b$) by a larger base ($b'$):
 \begin{align*}
@@ -23,13 +23,7 @@ In short, the trick is to use a larger RoPE base while keeping token indices $m$
 
 \subsection{Intuition}
 
-Increasing ($b$) slows the phase growth of rotations at high ($i$) (high frequencies), so relative angles between nearby tokens remain similar even when absolute positions are much larger. In the NTK view, that keeps the model's kernel (and thus its inductive bias) closer to what it saw in training, mitigating the usual long-range decay/aliasing of RoPE. Empirical and theoretical works tie context length capability tightly to the RoPE base; too small a base leads to superficial long-context behavior (low perplexity but poor retrieval). ([NeurIPS Proceedings][2])
-
-# How it compares to other RoPE extensions
-
-* **Position Interpolation (linear scaling)**: compresses positions (m \mapsto m/s), leaving (b) unchanged. Simple, often OK up to ~2–4×, but can distort local distances. NTK-aware is usually stabler at large spans. ([arXiv][3])
-* **NTK-aware (this method)**: changes (b \to b') via the formula above; works zero-shot and with minimal code changes (just rebuild the frequency matrix). Often used by LLaMA variants; Code LLaMA used a large fixed base (~1e6) alongside finetuning. ([OpenReview][4])
-* **YaRN**: a stronger recipe that *combines* base adjustment with a carefully designed interpolation/decay schedule and light finetuning; tends to outperform pure NTK scaling for very long contexts. ([arXiv][1])
+Increasing $b$ slows the phase growth of rotations at high $i$ (\ie high frequencies), so relative angles between nearby tokens remain similar even when absolute positions are much larger. In the NTK view, that keeps the model's kernel (and thus its inductive bias) closer to what it saw in training, mitigating the usual long-range decay/aliasing of RoPE. Empirical and theoretical works tie context length capability tightly to the RoPE base; too small a base leads to superficial long-context behavior (low perplexity but poor retrieval). 
 
 \begin{lstlisting}[language=Python]
 # d_head = per-head dimension (even)
@@ -44,47 +38,7 @@ def ntk_aware_inv_freq(d_head: int, base: float, s: float):
     return inv_freq  # use to build cos/sin angles as in standard RoPE
 \end{lstlisting}
 
-% # Practical tips & caveats
-
-% * **How far can you push it?** Zero-shot gains of **2–4×** are common; beyond that, quality can drop unless you fine-tune (YaRN/ABF-style). Tooling (e.g., llama.cpp) exposes both `rope_freq_base` and optional extra scalings; optimal values can be finicky for >4×. ([GitHub][5])
-% * **Choose (d) correctly**: use the **per-head** dimension, not the model hidden size.
-% * **Base matters theoretically**: there are **lower bounds** on (b) needed to truly support a target context; too-small bases can look fine on perplexity yet fail retrieval over long ranges. ([NeurIPS Proceedings][2])
-
-% If you want, tell me your model (e.g., LLaMA-2 7B with (d_{\text{head}}=128)), training context (e.g., 4K), and your target (e.g., 16K/32K). I'll plug numbers, show the exact (b'), and note any gotchas for inference vs. finetuning.
-
 \section{Dynamic Scaling}
 
 \section{Yet Another RoPE Extension (YaRN)}
-
-% \paragraph{Summary}
-% \begin{itemize}
-% 	\item Stability of Vectors: Adding tokens at the end of a sentence doesn't affect the vectors for words at the beginning, facilitating efficient caching.
-% 	\item Preservation of Relative Positions: If two words, say ``pig'' and ``dog,'' maintain the same relative distance in different contexts, their vectors are rotated by the same amount. This ensures that the angle, and consequently the dot product between these vectors, remains constant
-% \end{itemize}
-
-% \begin{itemize}
-% 	\item Rotary Positional Encoding (RoPE) rotates the token embeddings by a position-dependent angle rather than simply adding a positional vector.
-% 	\item Decomposition into 2D Subspaces: The \(d\)-dimensional embedding is split into \(d/2\) pairs. For each pair (treated as a 2D vector), a rotation is applied.
-% 		\tie
-% 3. **Rotation Matrix \(R(\theta)\):**  
-%    The standard 2D rotation matrix,
-%    \[
-%    R(\theta) = 
-%    \begin{pmatrix}
-%    \cos(\theta) & -\sin(\theta) \\
-%    \sin(\theta) & \cos(\theta)
-%    \end{pmatrix},
-%    \]
-%    rotates vectors by \(\theta\) and comes from classical geometry. It is used here because it naturally encodes a continuous positional shift.
-% 4. **Position-Specific Rotation:**  
-%    For token at position \(i\) in subspace \(k\), the rotation angle is \(\theta_{i, k} = i \cdot \alpha_k\), where \(\alpha_k\) scales the rotation differently for each subspace.
-% 5. **Integration with Attention:**  
-%    RoPE is applied to both query and key vectors. The dot product between rotated vectors can be re-expressed as:
-%    \[
-%    \tilde{\mathbf{q}}_i^\top \tilde{\mathbf{k}}_j = \mathbf{q}_i^\top\, \mathbf{M}(i,j)\, \mathbf{k}_j,
-%    \]
-%    where \(\mathbf{M}(i,j)\) is a block diagonal matrix with blocks \(R((j-i)\alpha_k)\) that capture the relative position between tokens.
-
-% By rotating the embeddings with \(R(\theta)\), RoPE introduces a sophisticated yet efficient mechanism to encode both absolute and relative positional information, enhancing the transformer's ability to capture the structure and nuances inherent in sequential data.
-% \end{itemize}
 
