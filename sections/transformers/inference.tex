@@ -1,17 +1,19 @@
-\section{Inference of Autoregressive Model}
+\chapter{Inference of Autoregressive Model}
 
-In an autoregressive transformer (such as GPT), tokens are generated one at a time. During inference, the model must compute attention for the next token based on all previously generated tokens. However, because recomputing the entire attention from scratch at each time step would be inefficient, these models use \textit{caching} to store intermediate results (the keys and values) from previous time steps. Below is an explanation with equations and clear notations.
 
-\paragraph{Inference Overview in Autoregressive Models}
+\section{Overview of Inference in Autoregressive Models}
+
+In an autoregressive transformer (\eg GPT), tokens are generated one at a time. During inference, the model must compute attention for the next token based on all previously generated tokens. However, recomputing the entire attention from scratch at each time step would be inefficient. Thus, these models often use \textit{caching} to store intermediate results (the keys and values) from previous time steps. 
+
 \begin{itemize}
-	\item Training: The model can process the entire sequence in parallel using masked self-attention. A mask (typically a triangular matrix) prevents tokens from ``seeing'' future tokens.
-	\item Inference: The model generates one token at a time. At time step \( t+1 \), it uses the already generated tokens \( [x_1, x_2, \dots, x_t] \) to compute the probability distribution for the next token.
+	\item \textbf{Training}: The model can process the entire sequence in parallel using masked self-attention. A mask (typically a triangular matrix) prevents tokens from ``seeing'' future tokens.
+	\item \textbf{Inference}: The model generates one token at a time. At time step $t+1$, it uses the cached tokens $[x_1, x_2, \dots, x_t]$ to compute the probability distribution for the next token.
 \end{itemize}
+To avoid recomputing keys and values for tokens $x_1, \dots, x_t$ at every step, the model stores them (usually for each layer). When a new token is generated, only its query needs to be computed, and then the cached keys and values are used to compute the attention.
 
-To avoid recomputing keys and values for tokens \( x_1, \dots, x_t \) at every step, the model stores them (usually for each layer). When a new token is generated, only its query needs to be computed, and then the cached keys and values are used to compute the attention.
+The technique of storing and reusing the computed keys and values from previous tokens during autoregressive generation is commonly called \textit{KV-caching} (short for Key-Value Caching).
 
-The technique of storing and reusing the computed keys and values from previous tokens during autoregressive generation is commonly called \textit{KV caching} (short for Key-Value Caching).
-
+\section{KV-Caching}
 \paragraph{Step 1: Previous Tokens and Cached Representations}
 
 Assume that by time step \( t \) the model has generated tokens:
@@ -22,17 +24,17 @@ x_1,\, x_2,\, \dots,\, x_t.
 For a given transformer layer, let the cached key and value matrices be:
 \[
 \begin{aligned}
-K_{\leq t} &\in \mathbb{R}^{t \times d_k}, \\
-V_{\leq t} &\in \mathbb{R}^{t \times d_v},
+	K_{\leq t} &\in \mathbb{R}^{t \times d_k}, \\
+	V_{\leq t} &\in \mathbb{R}^{t \times d_v},
 \end{aligned}
 \]
-where \( d_k \) is the key (and query) dimension and \( d_v \) is the value dimension.
+where $d_k$ and $d_v$ are the key and the value dimensions, respectively. They are often set to be the same.
 
 \paragraph{Step 2: Compute the Query for the New Token}
 
-When generating the next token \( x_{t+1} \), its input (often the embedding of the previously generated token or a special “start” symbol) is used to compute a query vector for each layer:
+When generating the next token $x_{t+1}$, its input (often the embedding of the previously generated token or a special start symbol) is used to compute a query vector for each layer:
 \[
-q_{t+1} \in \mathbb{R}^{d_k}.
+	q_{t+1} \in \mathbb{R}^{d_k}.
 \]
 
 This is computed by a linear projection:
@@ -105,20 +107,7 @@ Let's take a look at the following example:
   \]
 \end{itemize}
 
-\paragraph{Step A: Compute Queries, Keys, and Values}
-
 \begin{itemize}
-	\item Queries:  
-   \[
-     q_i = x_i \, W^Q 
-   \]
-   For \(i=1,2,3,4\):
-   \begin{itemize}
-	   \item \(q_1 = [1\;\;2] \begin{bmatrix}1 & 0 \\ 0 & 1\end{bmatrix} = \begin{bmatrix}1 & 2\end{bmatrix}\)
-	   \item \(q_2 = [3\;\;4] \begin{bmatrix}1 & 0 \\ 0 & 1\end{bmatrix} = \begin{bmatrix}3 & 4\end{bmatrix}\)
-	   \item \(q_3 = [5\;\;6] \begin{bmatrix}1 & 0 \\ 0 & 1\end{bmatrix} = \begin{bmatrix}5 & 6\end{bmatrix}\)
-	   \item \(q_4 = [?,\; ?] \begin{bmatrix}1 & 0 \\ 0 & 1\end{bmatrix} = \begin{bmatrix}? & ?\end{bmatrix}\)
-   \end{itemize}
 	\item Keys:
 	   \[
 		 k_i = x_i \, W^K
@@ -177,7 +166,7 @@ In other words, you skip re-projecting and re-computing every key and value from
 
 In sum, the vanilla self-attention on $n$ tokens,
 \begin{itemize}
-	\item each token needs to look at all $n$ tokens to get attention scores
+	\item Each token needs to look at all $n$ tokens to get attention scores
     \item Thus, the cost is $O(n^2)$ 
 \end{itemize}
 

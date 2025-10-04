@@ -1,0 +1,138 @@
+\section{Rotary Position Embedding (RoPE)}
+
+Rather than adding a positional vector to the token embeddings, \textbf{RoPE rotates the embeddings by a position-specific angle.} Think of it as twisting the embedding in space based on its position. For instance, if you have a simple two-dimensional embedding for the word ``dog'', you can imagine its vector being rotated by an angle \(\theta\) if it's the first word, \(2\theta\) if it's the second word, and so on.
+
+For a high-dimensional embedding $\rvq$ (\eg in \(\mathbb{R}^d\)) at position $p$, we create a block diagonal matrix $\mathrm{diag}\big(R(\omega_1 p),R(\omega_2 p),\dots, R(\omega_{d/2} p)\big)$. Then, we can rotate each dimension of $\rvq$:
+\begin{align*}
+	\begin{bmatrix}
+		R_1 & & \\
+		    & R_2 & \\
+			&  & R_{d/2}
+	\end{bmatrix}
+	\begin{bmatrix}
+		q_1\\
+		\vdots\\
+		q_d
+	\end{bmatrix}
+\end{align*}
+As you can see, RoPE divides the vector into \(d/2\) pairs (or 2D subspaces). For a token at position \(i\), denote its embedding by:
+\begin{align*}
+	\mathbf{x}_i \in \mathbb{R}^d.
+\end{align*}
+We partition \(\mathbf{x}_i\) into pairs:
+\begin{align*}
+	\mathbf{x}_i^{(k)} = 
+	\begin{pmatrix}
+	x_{i,2k} \\
+	x_{i,2k+1}
+	\end{pmatrix},\quad k = 0, 1, \ldots, \frac{d}{2}-1.
+\end{align*}
+Subsequently, for each 2D subspace indexed by \(k\), RoPE defines a rotation angle:
+\[
+\theta_{i, k} = i \cdot \alpha_k,
+\]
+where \(\alpha_k\) is a scaling factor that typically depends on the dimension \(k\). A popular choice is:
+\[
+\alpha_k = \frac{1}{10000^{\frac{2k}{d}}}.
+\]
+This scaling mimics the frequency scaling in sinusoidal embeddings (\ie positional embedding), ensuring that different subspaces capture positional information at different granularities.
+
+In two-dimensional geometry, any rotation by an angle \(\theta\) can be represented by a \textit{rotation matrix} \(R(\theta)\). This matrix is a standard tool in linear algebra and has the form:
+\[
+R(\theta) = 
+\begin{pmatrix}
+\cos(\theta) & -\sin(\theta) \\
+\sin(\theta) & \cos(\theta)
+\end{pmatrix}.
+\]
+We compute its rotated version:
+\[
+\text{RoPE}_i \bigl(\mathbf{x}_i^{(k)}\bigr)
+= R(\theta_{i, k})\, \mathbf{x}_i^{(k)}
+= \begin{pmatrix}
+\cos(\theta_{i, k}) & -\sin(\theta_{i, k}) \\
+\sin(\theta_{i, k}) & \cos(\theta_{i, k})
+\end{pmatrix}
+\begin{pmatrix}
+x_{i,2k} \\
+x_{i,2k+1}
+\end{pmatrix}.
+\]
+This yields the updated coordinates:
+\[
+\begin{aligned}
+\tilde{x}_{i, 2k} &= x_{i,2k}\cos(\theta_{i,k}) - x_{i,2k+1}\sin(\theta_{i,k}),\\[6pt]
+\tilde{x}_{i, 2k+1} &= x_{i,2k+1}\cos(\theta_{i,k}) + x_{i,2k}\sin(\theta_{i,k}).
+\end{aligned}
+\]
+After processing all \(d/2\) subspaces, we concatenate the results back into a full \(d\)-dimensional vector \(\tilde{\mathbf{x}}_i\).
+
+In transformer architectures, \textbf{RoPE is applied to both the query and the key vectors} except the value vecotrs:
+\[
+\begin{aligned}
+\tilde{\mathbf{q}}_i &= \text{RoPE}_i(\mathbf{q}_i), \\
+\tilde{\mathbf{k}}_j &= \text{RoPE}_j(\mathbf{k}_j).
+\end{aligned}
+\]
+
+Then, the attention score between positions \(i\) and \(j\) is calculated as:
+\[
+\text{Attention}(i, j) = \frac{\tilde{\mathbf{q}}_i \cdot \tilde{\mathbf{k}}_j}{\sqrt{d}}.
+\]
+
+A key property of RoPE is that the dot product between the rotated vectors can be reinterpreted to show how relative positions are encoded. In particular, one can derive that:
+\[
+\tilde{\mathbf{q}}_i^\top \tilde{\mathbf{k}}_j = \mathbf{q}_i^\top\, \mathbf{M}(i,j)\, \mathbf{k}_j,
+\]
+where \(\mathbf{M}(i,j)\) is a block diagonal matrix that encapsulates the effect of the relative positional difference \(j-i\).
+
+Focus on one 2D subspace (indexed by \(k\)):
+\begin{itemize}
+	\item The query subvector at position \(i\) is rotated by \(\theta_{i,k} = i\alpha_k\).
+	\item The key subvector at position \(j\) is rotated by \(\theta_{j,k} = j\alpha_k\).
+\end{itemize}
+
+The dot product in this subspace is:
+\[
+\tilde{\mathbf{q}}_i^{(k)\top} \tilde{\mathbf{k}}_j^{(k)} 
+= \left(\mathbf{q}_i^{(k)}\right)^\top R(\theta_{i,k})^\top R(\theta_{j,k}) \, \mathbf{k}_j^{(k)}.
+\]
+Since the transpose of a rotation matrix is its inverse (i.e., \(R(\theta)^\top = R(-\theta)\)), we have:
+\[
+R(\theta_{i,k})^\top R(\theta_{j,k}) = R(-\theta_{i,k})R(\theta_{j,k}) = R\bigl(\theta_{j,k} - \theta_{i,k}\bigr).
+\]
+Because \(\theta_{j,k} - \theta_{i,k} = (j-i)\alpha_k\), the transformation becomes:
+\[
+R\bigl((j-i)\alpha_k\bigr).
+\]
+
+Repeating this for each 2D subspace results in a block diagonal matrix:
+\[
+\mathbf{M}(i,j) = \text{diag}\Bigl(
+R\bigl((j-i)\alpha_0\bigr),\,
+R\bigl((j-i)\alpha_1\bigr),\,
+\ldots,\,
+R\bigl((j-i)\alpha_{\frac{d}{2}-1}\bigr)
+\Bigr).
+\]
+Each block is the 2×2 rotation matrix:
+\[
+R\bigl((j-i)\alpha_k\bigr)
+= \begin{pmatrix}
+\cos\bigl((j-i)\alpha_k\bigr) & -\sin\bigl((j-i)\alpha_k\bigr) \\
+\sin\bigl((j-i)\alpha_k\bigr) & \cos\bigl((j-i)\alpha_k\bigr)
+\end{pmatrix}.
+\]
+
+\begin{itemize}
+	\item Relative Positional Bias:  
+  The matrix \(\mathbf{M}(i,j)\) adjusts the dot product between queries and keys based on their relative positions \((j-i)\). Thus, the value vectors are not modified. Instead of explicitly adding a relative position embedding, the rotation inherently modulates the interaction between tokens.
+	\item Unified Encoding: Since \(\mathbf{M}(i,j)\) is built from standard rotation matrices \(R(\theta)\), it seamlessly encodes the relative positional difference across all 2D subspaces. This results in a unified treatment where both absolute and relative positional cues are embedded into the attention calculation.
+	\item Elegant Mathematical Foundation: The use of \(R(\theta)\) comes directly from classical geometry and linear algebra. It leverages the well-known properties of rotations in 2D—specifically, that rotations preserve vector norms and that the composition of rotations is itself a rotation (with the angle being the sum or difference of the individual angles). This mathematical elegance translates into an efficient and effective mechanism for positional encoding.
+	\item Geometric Interpretation: 
+		\begin{itemize}
+			\item The rotation matrix \(R(\theta)\) rotates any 2D vector by the angle \(\theta\) (in the counterclockwise direction) while preserving its magnitude. 
+			\item This property makes it ideal for encoding positional shifts—rotating a vector \textbf{does not change its content (its norm) but changes its direction}, thereby encoding positional information.
+		\end{itemize}
+	\item Inherent Relative Encoding: When different positions correspond to different rotation angles, \textbf{the relationship between any two positions can be captured by the difference in their rotation angles}. This leads to a natural encoding of relative position without having to explicitly compute or store separate relative position vectors.
+\end{itemize}
