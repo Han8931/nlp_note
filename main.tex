@@ -37,6 +37,14 @@
 }
 \lstset{style=mystyle}
 
+\usepackage[most]{tcolorbox}
+\newtcolorbox{commentbox}[1]{colback=blue!5!white,
+  colframe=blue!75!black,
+  fonttitle=\bfseries,
+  title=#1,  % use like \begin{commentbox}{My title}
+  enhanced, breakable
+}
+
 
 \usepackage[autostyle]{csquotes}
 \usepackage{dsfont}
@@ -92,6 +100,8 @@
 \mainmatter
 \part{Introduction}
 \include{./sections/intro}
+\part{Classical NLP}
+\include{./sections/nlp/nlp}
 \part{Transformers}
 \include{./sections/transformers/transformers}
 \part{Post-Training}
