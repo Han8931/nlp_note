@@ -5,12 +5,14 @@ Rather than adding a positional vector to the token embeddings, \textbf{RoPE rot
 For a high-dimensional embedding $\rvq$ (\eg in \(\mathbb{R}^d\)) at position $p$, we create a block diagonal matrix $\mathrm{diag}\big(R(\omega_1 p),R(\omega_2 p),\dots, R(\omega_{d/2} p)\big)$. Then, we can rotate each dimension of $\rvq$:
 \begin{align*}
 	\begin{bmatrix}
-		R_1 & & \\
-		    & R_2 & \\
-			&  & R_{d/2}
+		R_1 &   \mathbf{0}   & \cdots      &\mathbf{0} \\
+		\mathbf{0}&  R_2 &  \cdots     &\vdots \\
+		\vdots	&   \ddots   &\ddots &\mathbf{0} \\
+		\mathbf{0}	& \cdots     &   \mathbf{0}    & R_{d/2}
 	\end{bmatrix}
 	\begin{bmatrix}
 		q_1\\
+		q_2\\
 		\vdots\\
 		q_d
 	\end{bmatrix}

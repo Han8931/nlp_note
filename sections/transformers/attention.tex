@@ -282,7 +282,7 @@ Then, applying the softmax function row-wise produces an attention weight matrix
    A = \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right).
 \end{align*}
 
-You can also view the scale as a \textbf{temperature}:
+You can also view the scaling factor as a \textbf{temperature}:
 \begin{align*}
 	\operatorname{softmax}\!\left(\frac{QK^\top}{\tau}\right).	
 \end{align*}
@@ -310,7 +310,7 @@ The final output is:
 \]
 
 \subsection{Masked Attention}
-In autoregressive tasks (\eg language modeling), it is essential that when predicting a token at position ii, the model does not ``peek'' at any tokens at positions $j>i$. \textit{Masked attention} ensures that each token only attends to tokens at the same or earlier positions. The masked attention is often referred to \textit{cross-attention}. This is just a self-attention in decoder.
+In autoregressive tasks (\eg language modeling), it is essential that when predicting a token at position $i$, the model does not peek at any tokens at positions $j>i$. \textit{Masked attention} ensures that each token only attends to tokens at the same or earlier positions. The masked attention is often referred to \textit{cross-attention}. This is just a self-attention in decoder.
 $$\textrm{MA}(Q,K,V) = softmax\bigg(\frac{Q^TK+M}{\sqrt{d_k}}\bigg)V,$$
 where $M$ 
 \begin{align*}
@@ -407,6 +407,6 @@ so that each head processes queries, keys, and values of dimensions \(d_k'\) and
 	\includegraphics[scale=0.5]{./images/transformer/multi_head_attention.png}
 \end{figure}
 
-If we use a single value and a single key over all queries, we can significantly reduce the memory usage for KV caching. This is the basic idea of the multi-query attention (MQA) and the grouped query attention (GQA). However, MQA tends to lower the output quality as the model size increases. GQA achieved a balance between them. 
+If we use a single value and a single key over all queries, we can significantly reduce the memory usage for \textit{KV caching}. This is the basic idea of the \textit{multi-query attention} (MQA) and the \textit{grouped query attention} (GQA). However, MQA tends to lower the output quality as the model size increases. GQA achieved a balance between them. 
 
 

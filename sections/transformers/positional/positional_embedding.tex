@@ -88,9 +88,11 @@ Since \( P \) and \( P^T \) are just reordering rows and columns, respectively, 
 A' = P \, A \, P^T.
 \]
 Finally, the output for the permuted input is:
-\[
-\text{Attention}(X') = A' V' = (P A P^T)(P V) = P A V = P \, \text{Attention}(X).
-\]
+\begin{align*}
+	\text{Attention}(X') &= A' V' \\ 
+						 &= (P A P^T)(P V) = P A V \quad \text{, since } PP^T=I \\
+	&= P \, \text{Attention}(X).
+\end{align*}
 As you can see the self-attention mechanism is \textit{equivariant} to permutations. This means that if you permute the input tokens, the output is permuted in the same way. There is no mechanism in the equations above that distinguishes one ordering from another; the operations treat all tokens symmetrically.
 
 Thus, without additional positional encodings, if you were to shuffle the tokens, the model would compute the same set of pairwise interactions—just in a different order. The structure of the equations does not provide any mechanism for the model to know that one token came before or after another.

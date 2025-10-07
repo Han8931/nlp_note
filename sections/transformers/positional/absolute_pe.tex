@@ -126,14 +126,14 @@ A shift by $k$ is then a \textbf{block-diagonal rotation}:
 where each block $R(\omega_i k)$ is the $2\times 2$ rotation above.
 
 \begin{itemize}
-	\item Relative structure: Because $\mathrm{PE}(p+k)=R(k)\mathrm{PE}(p)$, relative offsets are linearly encoded.
+	\item \textbf{Relative structure}: Because $\mathrm{PE}(p+k)=R(k)\mathrm{PE}(p)$, relative offsets are linearly encoded.
 	\item Extrapolation: No learned parameters; positions outside training range still lie on circles $\to$ better length extrapolation than learned embeddings.
-	\item Dot-product behavior (vanilla additive PE): In a standard Transformer, we add PE to token embeddings: $x_p = e_p + \mathrm{PE}(p)$. Attention logits involve
+	\item \textbf{RoPE connection}: RoPE takes the rotation view further by rotating $Q$ and $K$ in these 2D subspaces, making attention depend on relative positions more cleanly than simple addition.
+	\item \textbf{Dot-product behavior} (vanilla additive PE): In a standard Transformer, we add PE to token embeddings: $x_p = e_p + \mathrm{PE}(p)$. Attention logits involve
 		\begin{align*}
 		  x_p^\top x_q = e_p^\top e_q + e_p^\top \mathrm{PE}(q) + \mathrm{PE}(p)^\top e_q + \mathrm{PE}(p)^\top \mathrm{PE}(q).
 		\end{align*}
   The PE–PE term depends on ($cos(w_i(q-p))$) (via angle differences), which injects relative info, but cross terms mix with content.
-	\item RoPE connection: RoPE takes the rotation view further by rotating $Q$ and $K$ in these 2D subspaces, making attention depend on relative positions more cleanly than simple addition.
 \end{itemize}
 
 \paragraph{Example} Pick one frequency $\omega=\tfrac{2\pi}{T}$ (period $T$).
