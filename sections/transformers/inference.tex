@@ -1,6 +1,5 @@
 \chapter{Inference of Autoregressive Model}
 
-
 \section{Overview of Inference in Autoregressive Models}
 
 In an autoregressive transformer (\eg GPT), tokens are generated one at a time. During inference, the model must compute attention for the next token based on all previously generated tokens. However, recomputing the entire attention from scratch at each time step would be inefficient. Thus, these models often use \textit{caching} to store intermediate results (the keys and values) from previous time steps. 
