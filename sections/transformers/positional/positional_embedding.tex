@@ -1,0 +1,105 @@
+\chapter{Positional Embedding}
+
+The self-attention mechanism in transformers treats all tokens in a sequence in parallel without an inherent notion of order. This means that, by itself, self-attention is invariant to the order of input tokens. Positional encoding is introduced to inject order information so that the model can differentiate between tokens based on their positions.
+\begin{itemize}
+	\item \textbf{Absolute Positional Embeddings}: Each position in the sequence is assigned a unique vector. Although straightforward, these embeddings don't scale well to longer sequences and fail to capture the nuances of relative positions between tokens.
+	\item \textbf{Relative Positional Embeddings}: These embeddings focus on the distance between tokens, which can improve the model's understanding of token relationships. However, they typically introduce additional complexity into the model architecture.
+\end{itemize}
+
+\section{Permutation Invariance of Self-Attention}
+
+Without positional embeddings, the transformer's self-attention would treat the input as a bag of tokens, ignoring the order entirely. The added positional embeddings break this permutation invariance by encoding the position directly into the token representation. As a result, even if the same tokens are present, the model can infer their relative order and roles in the sentence.
+
+Let's look at an example:
+
+\begin{lstlisting}[language=Python]
+import torch
+import torch.nn as nn
+from transformers import AutoTokenizer, AutoModel
+
+# Small, public model (no auth required)
+model_id = "prajjwal1/bert-tiny"
+tok = AutoTokenizer.from_pretrained(model_id)
+model = AutoModel.from_pretrained(model_id)
+
+text = "The dog chased another dog"
+tokens = tok(text, return_tensors="pt")["input_ids"]          # [batch, seq]
+embeddings = model.get_input_embeddings()(tokens)              # [batch, seq, hidden]
+hdim = embeddings.shape[-1]
+
+# Randomly initialized MHA
+W_q = nn.Linear(hdim, hdim, bias=False)
+W_k = nn.Linear(hdim, hdim, bias=False)
+W_v = nn.Linear(hdim, hdim, bias=False)
+mha = nn.MultiheadAttention(embed_dim=hdim, num_heads=4, batch_first=True)
+
+with torch.no_grad():
+    for param in mha.parameters():
+        nn.init.normal_(param, std=0.1)
+
+output, _ = mha(W_q(embeddings), W_k(embeddings), W_v(embeddings))
+
+# With BERT tokenization, sequence is: 
+# [CLS], "the", "dog", "chased", "another", "dog", [SEP]
+dog1_out = output[0, 2]
+dog2_out = output[0, 5]
+breakpoint()
+print(f"Dog output identical?: {torch.allclose(dog1_out, dog2_out, atol=1e-6)}")
+\end{lstlisting}
+We use raw token embeddings (no positional encodings). Then, identical tokens (\ie ``dog'') at different positions produce identical attention outputs under our randomly initialized MHA.
+
+If you simply pass this sentence into a transformer, the model wouldn't know the order of the words. The same set of token (\ie word) embeddings could represent a sentence like ``chased dog the dog another'' if no ordering information were provided.
+
+We formulate this as follows: With a permutation matrix \( P \) of shape \( (n, n) \), the input tokens can be permuted as 
+\[
+X' = P X.
+\]
+Let's follow the same self-attention process for \( X' \):
+\[
+Q' = X'W_q = P X W_q = P Q,
+\]
+\[
+K' = X'W_k = P X W_k = P K,
+\]
+\[
+V' = X'W_v = P X W_v = P V.
+\]
+Then, compute the scores using \( Q' \) and \( K' \):
+\[
+S' = \frac{Q'(K')^T}{\sqrt{d_k}} = \frac{(P Q)(P K)^T}{\sqrt{d_k}}.
+\]
+   
+Note that
+\[
+(P K)^T = K^T P^T,
+\]
+so
+\[
+S' = \frac{P Q K^T P^T}{\sqrt{d_k}} = P \, S \, P^T.
+\]
+
+The softmax is applied row-wise. 
+\[
+A' = \text{Softmax}(S').
+\]
+   
+Since \( P \) and \( P^T \) are just reordering rows and columns, respectively, the attention weights $A$ are simply permuted like below:
+\[
+A' = P \, A \, P^T.
+\]
+Finally, the output for the permuted input is:
+\begin{align*}
+	\text{Attention}(X') &= A' V' \\ 
+						 &= (P A P^T)(P V) = P A V \quad \text{, since } PP^T=I \\
+	&= P \, \text{Attention}(X).
+\end{align*}
+As you can see the self-attention mechanism is \textit{equivariant} to permutations. This means that if you permute the input tokens, the output is permuted in the same way. There is no mechanism in the equations above that distinguishes one ordering from another; the operations treat all tokens symmetrically.
+
+Thus, without additional positional encodings, if you were to shuffle the tokens, the model would compute the same set of pairwise interactions—just in a different order. The structure of the equations does not provide any mechanism for the model to know that one token came before or after another.
+
+
+\input{./sections/transformers/positional/absolute_pe}
+\input{./sections/transformers/positional/rope}
+\input{./sections/transformers/positional/advanced_pe}
+
+

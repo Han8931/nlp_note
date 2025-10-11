@@ -37,6 +37,14 @@
 }
 \lstset{style=mystyle}
 
+\usepackage[most]{tcolorbox}
+\newtcolorbox{commentbox}[1]{colback=blue!5!white,
+  colframe=blue!75!black,
+  fonttitle=\bfseries,
+  title=#1,  % use like \begin{commentbox}{My title}
+  enhanced, breakable
+}
+
 
 \usepackage[autostyle]{csquotes}
 \usepackage{dsfont}
@@ -92,12 +100,17 @@
 \mainmatter
 \part{Introduction}
 \include{./sections/intro}
+\part{Classical NLP}
+\include{./sections/nlp/nlp}
 \part{Transformers}
 \include{./sections/transformers/transformers}
+\part{Post-Training}
+\include{./sections/post_train/preference}
 \part{Advanced}
 % \include{./sections/advanced/lora}
 \include{./sections/advanced/reasoning}
 \include{./sections/advanced/agents}
+% \include{./sections/advanced/compression}
 
 \backmatter
 % bibliography, glossary and index would go here.

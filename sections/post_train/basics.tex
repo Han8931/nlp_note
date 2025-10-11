@@ -1,0 +1,53 @@
+\section{Introduction}
+
+To make a large language model (LLM) actually useful for answering questions, we typically start from a base model and apply post-training (often called fine-tuning). Unlike massive web corpora used for pre-training, post-training data are smaller, curated, and purpose-built. Post-training is used to align the model's behavior (helpful, truthful, harmless) and to amplify capabilities acquired during pre-training. Common approaches include supervised fine-tuning (SFT) and reinforcement learning from human feedback (RLHF). Following DeepSeek R1, reinforcement learning with verifiable rewards (RLVR) has gained traction for improving reasoning and coding.
+
+\textit{Verifiable rewards} are signals that can be checked by a simple, trustworthy procedure, so the agent cannot easily game them. Rather than rewarding "doing a good job" in the abstract, you only reward outputs that pass an external test (a verifier).
+
+A basic RL objective for post-training is
+\begin{align*}
+	\max_{\pi}\;\mathbb{E}_{y\sim \pi(\cdot\mid x)}\big[r(x,y)\big]\;-\;\beta\,\mathrm{KL}\!\left(\pi(\cdot\mid x)\,\|\,\pi_{0}(\cdot\mid x)\right),
+\end{align*}
+where
+\begin{itemize}
+	\item $r$: For a prompt $x$ and model output $y$, we can define a scalar reward $r(x,y)$ that measures how desirable $y$ is. 
+	\item An SFT model (\ie policy model) $\pi$ and a frozen reference model $\pi_0$.
+	\item $KL$ term regularizes $\pi$ to stay close to $\pi_0$.
+\end{itemize}
+
+\begin{figure}[t]
+	\centering
+	\includegraphics[scale=0.4]{./images/post_train/rlfh.png}
+\end{figure}
+
+\subsection{Reward Models in RLHF}
+
+The InstructGPT paper popularized training a reward model (RM) from human preference rankings, now central to RLHF. An RM predicts how closely a candidate response matches what humans would prefer for a given prompt. To collect preference data, we sample a prompt and several model responses; human raters rank the responses (best→worst). These pairwise/ordinal labels train the RM, which then supplies a scalar reward during RL fine-tuning.
+
+\begin{commentbox}{Preference Data Example}
+\begin{lstlisting}[language=json]
+{
+"prompt": [
+	{"system":"You are a helpful, honest assistant."},
+	{"role": "user", "content": "What color is the sky?"},
+],
+"chosen": [{"role": "assistant", "content": "Washington, D.C."}],
+"rejected": [{"role": "assistant", "content": "? The capital of the United States is Washington, D.C."}],
+}
+\end{lstlisting}
+\end{commentbox}
+
+
+\subsection{Training Rewards Model}
+
+A standard way to train an RM draws on the \textit{Bradley–Terry model} for pairwise preferences. For two items $i$ and $j$ with positive scores $p_i, p_j$, the probability that $i$ is preferred over $j$ is
+\begin{align*}
+	P(i \succ j) = \frac{p_i}{p_i + p_j}.
+\end{align*}
+For LLM preferences, the two items are completions $y_1, y_2$ to the same prompt $x$. Let an RM $r_\theta(x,y)$ assign a scalar score to each completion. The pairwise preference probability can be written as
+\begin{align*}
+	P\big(y_1 \succ y_2 \mid x\big)
+	= \sigma\Big(r_\theta(x,y_1) - r_\theta(x,y_2)\Big),
+\end{align*}
+where $\sigma(\cdot)$ is the logistic function. Training the RM then amounts to maximizing the likelihood of observed human preferences under this model.
+

@@ -1,3 +1,5 @@
+\chapter{Attention Mechanism}
+
 \begin{figure}[t]
 	\centering
 	\includegraphics[scale=0.2]{./images/transformer/transformer.png}
@@ -11,14 +13,14 @@
 	\item Each example across batch dimension is of course processed completely independently and never ``talk'' to each other
 	\item In an ``encoder'' attention block just delete the single line that does masking with `tril`, allowing all tokens to communicate. This block here is called a ``decoder'' attention block because it has triangular masking, and is usually used in autoregressive settings, like language modeling.
 	\item ``self-attention'' just means that the keys and values are produced from the same source as queries. In ``cross-attention'', the queries still get produced from $x$, but the keys and values come from some other, external source (\eg an encoder module)
-	\item ``Scaled'' attention additional divides `wei` by $1/sqrt(head\_size)$. This makes it so when input Q,K are unit variance, wei will be unit variance too and Softmax will stay diffuse and not saturate too much. Illustration below
+	\item Scaled attention divides the pre-softmax scores $QK^⊤$ by its head size. If $Q$ and $K$ have unit variance, this makes the scores roughly unit variance, so the softmax stays diffuse and doesn't saturate.
 \end{itemize}
 
-\section{Attention Mechanism}
+\section{Attention}
 \label{sec:nlp_attention}
 
 
-The attention mechanism assigns \textit{attention scores} (\ie \textit{weights}) to different parts of the input sequence, indicating how much each part contributes to the current output. In essence, the model ``pays attention'' to certain parts of the input more than others while processing each token in the sequence.
+The attention mechanism assigns \textit{attention scores} (\ie \textit{weights}) to different parts of the input sequence, indicating how much each part contributes to the current output. In essence, the model \textbf{pays attention} to certain parts of the input more than others while processing each token in the sequence.
 
 Assume the encoder produces 3 hidden states (each a 2-dimensional vector):
 \[
@@ -222,91 +224,93 @@ Here, $Q, K, V\in \mathbb{R}^{n\times d_{model}}$, $QK^T$'s time complexity is $
 \begin{figure}[t]
 	\centering
 	\includegraphics[scale=1.0]{./images/transformer/attention.pdf}
-	\caption{An Illustration of the self-attention.}
+	\caption{An illustration of the self-attention. The final output is the weighted sum of the value vectors.}
 \end{figure}
 
 \paragraph{Input Embeddings}
-
-   Each token \( i \) is represented by an embedding:
-   \[
-   \mathbf{x}_i \in \mathbb{R}^{d_{\text{model}}}.
-   \]
-   
-   You can think of all the tokens put together as a matrix:
-   \[
-   X \in \mathbb{R}^{n \times d_{\text{model}}}.
-   \]
+Each token \( i \) is represented by an embedding:
+\begin{align*}
+	\mathbf{x}_i \in \mathbb{R}^{d_{\text{model}}}.
+\end{align*}
+You can think of all the tokens put together as a matrix:
+\begin{align*}
+	X \in \mathbb{R}^{n \times d_{\text{model}}}.
+\end{align*}
 
 \paragraph{Projection Matrices}
 
-   To obtain the queries, keys, and values, we use learned projection matrices:
-   \[
-   \begin{aligned}
-   W^Q &\in \mathbb{R}^{d_{\text{model}} \times d_k}, \\
-   W^K &\in \mathbb{R}^{d_{\text{model}} \times d_k}, \\
-   W^V &\in \mathbb{R}^{d_{\text{model}} \times d_v}.
-   \end{aligned}
-   \]
+To obtain the queries, keys, and values, we use learned projection matrices:
+\begin{align*}
+	W^Q &\in \mathbb{R}^{d_{\text{model}} \times d_k}, \\
+	W^K &\in \mathbb{R}^{d_{\text{model}} \times d_k}, \\
+	W^V &\in \mathbb{R}^{d_{\text{model}} \times d_v}.
+\end{align*}
 
 \paragraph{Projected Matrices}
-   Multiplying the input \( X \) by these weight matrices gives:
-   \[
-   \begin{aligned}
-   Q &= X\,W^Q \in \mathbb{R}^{n \times d_k}, \\
-   K &= X\,W^K \in \mathbb{R}^{n \times d_k}, \\
-   V &= X\,W^V \in \mathbb{R}^{n \times d_v}.
-   \end{aligned}
-   \]
-   
-   Here, each row of \( Q \) (or \( K \), or \( V \)) corresponds to the query (or key, or value) of one token.
+Multiplying the input \( X \) by these weight matrices gives:
+\begin{align*}
+	Q &= X\,W^Q \in \mathbb{R}^{n \times d_k}, \\
+	K &= X\,W^K \in \mathbb{R}^{n \times d_k}, \\
+	V &= X\,W^V \in \mathbb{R}^{n \times d_v}.
+\end{align*}
+Here, each row of $Q$ (or $K$, or $V$) corresponds to the query (or key, or value) of one token.
 
 \paragraph{Dot-Product Attention Scores}
 
-   The attention scores between tokens are computed using:
-   \[
-   QK^\top \in \mathbb{R}^{n \times n}.
-   \]
-   
-   In this product:
-   \begin{itemize}
-	   \item \( Q \) is \( n \times d_k \)
-	   \item \( K^\top \) is \( d_k \times n \)
-   \end{itemize}
-   
-   
-   Therefore, the result is an \( n \times n \) matrix where each entry \((i,j)\) represents the (unnormalized) similarity between token \( i \) and token \( j \).
+The attention scores between tokens are computed using:
+\begin{align*}
+	QK^\top \in \mathbb{R}^{n \times n}.
+\end{align*}
 
-   \paragraph{Scaled Dot-Product and Softmax}
+In this product:
+\begin{itemize}
+   \item \( Q \) is \( n \times d_k \)
+   \item \( K^\top \) is \( d_k \times n \)
+\end{itemize}
 
-   Before applying the softmax, the scores are scaled by \( \sqrt{d_k} \):
-   \[
+Therefore, the result is an \( n \times n \) matrix where each entry \((i,j)\) represents the (unnormalized) similarity between token \( i \) and token \( j \).
+
+\paragraph{Scaled Dot-Product and Softmax}
+
+Before applying the softmax, the scores are scaled by \( \sqrt{d_k} \):
+\begin{align*}
    \frac{QK^\top}{\sqrt{d_k}} \in \mathbb{R}^{n \times n}.
-   \]
-   
-   Then, applying the softmax function row-wise produces an attention weight matrix \( A \in \mathbb{R}^{n \times n} \):
-   \[
-   A = \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right).
-   \]
+\end{align*}
 
-   \paragraph{Final Output}
-   Finally, the output of the self-attention layer is computed as:
-   \[
-   \text{Attention}(Q, K, V) = A\,V.
-   \]
-   
-   Since:
-   \begin{itemize}
-	   \item \( A \) is \( n \times n \),
-	   \item \( V \) is \( n \times d_v \),
-   \end{itemize}
-   
-   The final output is:
-   \[
-   \text{Attention}(Q, K, V) \in \mathbb{R}^{n \times d_v}.
-   \]
+Then, applying the softmax function row-wise produces an attention weight matrix \( A \in \mathbb{R}^{n \times n} \):
+\begin{align*}
+   A = \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right).
+\end{align*}
+
+You can also view the scaling factor as a \textbf{temperature}:
+\begin{align*}
+	\operatorname{softmax}\!\left(\frac{QK^\top}{\tau}\right).	
+\end{align*}
+\begin{itemize}
+	\item Bigger $\tau$: softer (more uniform) distribution.
+	\item Bigger $\tau$: sharper distribution.
+\end{itemize}
+
+
+\paragraph{Final Output}
+Finally, the output of the self-attention layer is computed as:
+\[
+\text{Attention}(Q, K, V) = A\,V.
+\]
+
+Since:
+\begin{itemize}
+   \item \( A \) is \( n \times n \),
+   \item \( V \) is \( n \times d_v \),
+\end{itemize}
+
+The final output is:
+\[
+\text{Attention}(Q, K, V) \in \mathbb{R}^{n \times d_v}.
+\]
 
 \subsection{Masked Attention}
-In autoregressive tasks (\eg language modeling), it is essential that when predicting a token at position ii, the model does not ``peek'' at any tokens at positions $j>i$. \textit{Masked attention} ensures that each token only attends to tokens at the same or earlier positions. The masked attention is often referred to \textit{cross-attention}. This is just a self-attention in decoder.
+In autoregressive tasks (\eg language modeling), it is essential that when predicting a token at position $i$, the model does not peek at any tokens at positions $j>i$. \textit{Masked attention} ensures that each token only attends to tokens at the same or earlier positions. The masked attention is often referred to \textit{cross-attention}. This is just a self-attention in decoder.
 $$\textrm{MA}(Q,K,V) = softmax\bigg(\frac{Q^TK+M}{\sqrt{d_k}}\bigg)V,$$
 where $M$ 
 \begin{align*}
@@ -403,6 +407,6 @@ so that each head processes queries, keys, and values of dimensions \(d_k'\) and
 	\includegraphics[scale=0.5]{./images/transformer/multi_head_attention.png}
 \end{figure}
 
-If we use a single value and a single key over all queries, we can significantly reduce the memory usage for KV caching. This is the basic idea of the multi-query attention (MQA) and the grouped query attention (GQA). However, MQA tends to lower the output quality as the model size increases. GQA achieved a balance between them. 
+If we use a single value and a single key over all queries, we can significantly reduce the memory usage for \textit{KV caching}. This is the basic idea of the \textit{multi-query attention} (MQA) and the \textit{grouped query attention} (GQA). However, MQA tends to lower the output quality as the model size increases. GQA achieved a balance between them. 
 
 
