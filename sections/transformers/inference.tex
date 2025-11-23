@@ -86,7 +86,7 @@ This \( z_{t+1} \) is then passed on through the rest of the transformer layer (
 
 \subsection{Inference without Caching}
 
-Let's take a look at the following example:
+\begin{commentbox}{Example}
 \begin{itemize}
 	\item Number of tokens so far: \(t=3\). We have already generated tokens \(\{x_1, x_2, x_3\}\). We now want to generate token \(x_4\).  
 	\item Model dimensionality: To keep it simple, let's say each token embedding is 2-dimensional (\(d_{\text{model}} = 2\)) and the attention uses a single head with key/query dimension \(d_k = 2\) and value dimension \(d_v = 2\). 
@@ -151,11 +151,14 @@ With KV caching, you would \emph{not} recalculate \(k_1, k_2, k_3\) and \(v_1, v
 			\item \(k_4, v_4\) (the new key and value to add to the cache).  
 		\end{itemize}
 \end{itemize}
+\end{commentbox}
+
+
 In other words, you skip re-projecting and re-computing every key and value from tokens \(\{1,2,3\}\). This saves a substantial amount of computation when generating long sequences, especially in large transformers (like GPT).
 
 \textbf{Note that storing data in the cache uses up memory space.} Systems with limited memory resources may struggle to accommodate this additional memory overhead, potentially resulting in out-of-memory errors. This is especially the case when long inputs need to be processed, as the memory required for the cache grows linearly with the input length and the batch size.
 
-\begin{figure}[t]
+\begin{figure}[h]
 	\centering
 	\includegraphics[scale=0.8]{./images/transformer/kv_caching.pdf}
 	\caption{An example of KV caching}
