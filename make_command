@@ -1,1 +1,1 @@
-find -name "*.tex" -o -name "*.sty" | entr make
+find . -name "*.tex" -o -name "*.sty" -o -name "*.bib" | entr -c make
